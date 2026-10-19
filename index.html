@@ -75,6 +75,24 @@ nav.tabs button.on{color:var(--shu)}
 .hit .h{font-size:.82rem;color:var(--kincha)}
 .hit .h b{font-family:"Shippori Mincho",serif;color:var(--ink);font-size:.95rem;margin-right:6px}
 .hit .s{font-size:.88rem;color:var(--sub);word-break:break-all}
+.nbtn{flex:none;border:1px solid var(--line);background:var(--paper);color:var(--sub);border-radius:8px;font-size:.75rem;padding:4px 8px;cursor:pointer}
+.nbtn.has{background:var(--matsuba);border-color:var(--matsuba);color:#fff}
+#note{position:fixed;inset:0;z-index:25;background:var(--washi);display:none;flex-direction:column}
+#note.open{display:flex}
+#note .nbar{display:flex;align-items:center;gap:8px;padding:calc(8px + env(safe-area-inset-top)) 12px 8px;border-bottom:1px solid var(--line);background:var(--paper)}
+#note .nbar .t{flex:1;min-width:0;font-family:"Shippori Mincho",serif;font-weight:700;font-size:1.15rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#note .nbar .t small{font-family:"Zen Kaku Gothic New";font-weight:400;font-size:.75rem;color:var(--sub);margin-left:6px}
+#note .nbody{flex:1;overflow:auto;-webkit-overflow-scrolling:touch;padding:12px 16px calc(24px + env(safe-area-inset-bottom))}
+#note .nbody .in{max-width:760px;margin:0 auto}
+.md h3{font-family:"Shippori Mincho",serif;color:var(--shu);font-size:1rem;margin:18px 0 6px;padding-left:8px;border-left:3px solid var(--shu)}
+.md h3:first-child{margin-top:4px}
+.md ul{margin:4px 0;padding-left:1.2em}
+.md li{margin:5px 0;line-height:1.65}
+.md p{margin:6px 0;line-height:1.7}
+.md b{color:var(--ai)}
+#ntext{width:100%;min-height:60vh;padding:12px;border:1px solid var(--line);border-radius:10px;background:var(--paper);font-size:16px;line-height:1.6;font-family:inherit;resize:vertical}
+.sbtn{border:1px solid var(--line);background:var(--paper);border-radius:8px;padding:6px 12px;cursor:pointer;font-size:.85rem;white-space:nowrap}
+.sbtn.pri{background:var(--shu);border-color:var(--shu);color:#fff}
 .hit mark{background:var(--kin-soft);color:var(--shu);font-weight:700;padding:0 1px}
 .jump{display:flex;gap:8px;align-items:center;margin-top:10px}
 .jump input{width:96px;padding:8px;border:1px solid var(--line);border-radius:8px;background:var(--paper)}
@@ -143,6 +161,14 @@ code{background:var(--kin-soft);padding:1px 5px;border-radius:4px;font-size:.82r
       <p id="exMsg"></p>
     </div>
     <div class="card">
+      <h2>マイノートのバックアップ</h2>
+      <p>ノートはこの端末の中だけに保存されます。機種変更や別の端末で使うときは、書き出したファイルを読み込んでください。</p>
+      <p id="noteCount"></p>
+      <button class="btn ghost" id="nexport">書き出す</button>
+      <button class="btn ghost" id="nimport">読み込む</button>
+      <input type="file" id="nfile" accept="application/json,.json" class="hidden">
+    </div>
+    <div class="card">
       <h2>保存データ</h2>
       <p id="storeInfo">—</p>
       <button class="btn ghost" id="clear">すべて削除</button>
@@ -160,6 +186,7 @@ code{background:var(--kin-soft);padding:1px 5px;border-radius:4px;font-size:.82r
   <div class="vbar">
     <button class="ib" id="vclose" aria-label="閉じる"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
     <div class="ttl" id="vttl"></div>
+    <button class="ib" id="vnote">ノート</button>
     <button class="ib" id="vmode">見開き</button>
     <button class="ib" id="vrot" aria-label="回転"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 12a8 8 0 1 1-2.3-5.6"/><path d="M20 4v5h-5"/></svg></button>
   </div>
@@ -171,6 +198,15 @@ code{background:var(--kin-soft);padding:1px 5px;border-radius:4px;font-size:.82r
     <button class="ib" id="vzi">＋</button>
     <button class="ib" id="vnext">次 ▶</button>
   </div>
+</div>
+<div id="note">
+  <div class="nbar">
+    <button class="sbtn" id="nclose">✕</button>
+    <div class="t" id="nttl"></div>
+    <button class="sbtn" id="nbook">本を開く</button>
+    <button class="sbtn pri" id="nedit">編集</button>
+  </div>
+  <div class="nbody"><div class="in" id="nin"></div></div>
 </div>
 <div class="toast" id="toast"></div>
 
@@ -239,8 +275,8 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = URL.createObjectURL(new Blob([document.
 const LS = {get(k,d){try{const v=localStorage.getItem('ekikampo.'+k);return v==null?d:JSON.parse(v)}catch(e){return d}},
             set(k,v){try{localStorage.setItem('ekikampo.'+k,JSON.stringify(v))}catch(e){}}};
 let dbp=null;
-function db(){ if(dbp) return dbp; dbp=new Promise((res,rej)=>{const r=indexedDB.open('ekikampo',1);
-  r.onupgradeneeded=()=>{const d=r.result; d.createObjectStore('files'); d.createObjectStore('text');};
+function db(){ if(dbp) return dbp; dbp=new Promise((res,rej)=>{const r=indexedDB.open('ekikampo',2);
+  r.onupgradeneeded=()=>{const d=r.result; for(const n of ['files','text','notes']) if(!d.objectStoreNames.contains(n)) d.createObjectStore(n);};
   r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error);}); return dbp; }
 async function idb(store,mode,fn){const d=await db();return new Promise((res,rej)=>{const t=d.transaction(store,mode);const s=t.objectStore(store);let out;const r=fn(s);if(r)r.onsuccess=()=>{out=r.result};t.oncomplete=()=>res(out);t.onerror=()=>rej(t.error);t.onabort=()=>rej(t.error);});}
 const getFile=v=>idb('files','readonly',s=>s.get(v));
@@ -285,6 +321,7 @@ function renderList(){
     if(!q && g!==last){ html+=`<li class="sec-h">${g}行</li>`; last=g; }
     html+=`<li class="item ${have.has(f.vol)?'':'nofile'}" data-p="${f.page}">
       <div class="main"><div class="nm">${esc(f.name)}${f.no?`<span class="badge">ツムラ ${f.no}</span>`:''}</div><div class="rd">${esc(f.reading||'')}</div></div>
+      <button class="nbtn ${NOTES[f.name]?'has':''}" data-note="${esc(f.name)}">${NOTES[f.name]?'ノート':'＋ノート'}</button>
       <div class="pg">p.${f.page}–${f.end}<br><span style="color:var(--sub);font-size:.75rem">PDF ${f.vol}</span></div></li>`;
   }
   $('#list').innerHTML=html;
@@ -292,7 +329,7 @@ function renderList(){
 $('#q').addEventListener('input',()=>{curGyou=null;renderGyou();renderList();});
 $('#gyou').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;curGyou=curGyou===b.dataset.g?null:b.dataset.g;$('#q').value='';renderGyou();renderList();
   const h=[...document.querySelectorAll('.sec-h')].find(x=>x.textContent.startsWith(b.dataset.g)); window.scrollTo({top:0});});
-$('#list').addEventListener('click',e=>{const it=e.target.closest('.item');if(it)openViewer(+it.dataset.p);});
+$('#list').addEventListener('click',e=>{const nb=e.target.closest('[data-note]'); if(nb){ e.stopPropagation(); openNote(nb.dataset.note); return; } const it=e.target.closest('.item');if(it)openViewer(+it.dataset.p);});
 
 /* ---------- tabs ---------- */
 function setTab(t){
@@ -530,18 +567,69 @@ async function searchText(){
     res=run(new RegExp(alts.join('|'),'g')); fuzzy=res.length>0;
   }
   res.sort((x,y)=>x.bp-y.bp);
-  if(!textCache.length){ $('#hits').innerHTML=`<div class="empty">取り込んだテキストがありません</div>`; return; }
-  if(!res.length){ $('#hits').innerHTML=`<div class="empty">「${esc(raw)}」は見つかりませんでした</div>`; return; }
-  $('#hits').innerHTML=`<div class="sec-h">${res.length}ページ${fuzzy?'（完全一致なし・1文字違いを表示）':''}</div>`+res.slice(0,300).map(r=>{const f=formulaAt(r.bp);
+  const nh=[]; for(const f of F){ const t=NOTES[f.name]; if(!t) continue; const nt=normText(t); const i=nt.indexOf(q); if(i<0) continue; const a=Math.max(0,i-24),b=Math.min(nt.length,i+q.length+40); nh.push(`<div class="hit" data-note="${esc(f.name)}"><div class="h"><b>${esc(f.name)}</b>マイノート</div><div class="s">${a>0?'…':''}${esc(nt.slice(a,i))}<mark>${esc(nt.slice(i,i+q.length))}</mark>${esc(nt.slice(i+q.length,b))}…</div></div>`); }
+  const nhtml=nh.length?`<div class="sec-h">マイノート ${nh.length}件</div>`+nh.join(''):'';
+  if(!textCache.length && !nh.length){ $('#hits').innerHTML=`<div class="empty">取り込んだテキストがありません</div>`; return; }
+  if(!res.length){ $('#hits').innerHTML=nhtml||`<div class="empty">「${esc(raw)}」は見つかりませんでした</div>`; return; }
+  $('#hits').innerHTML=nhtml+`<div class="sec-h">本文 ${res.length}ページ${fuzzy?'（完全一致なし・1文字違いを表示）':''}</div>`+res.slice(0,300).map(r=>{const f=formulaAt(r.bp);
     return `<div class="hit" data-p="${r.bp}"><div class="h"><b>${f?esc(f.name):''}</b>p.${r.bp}${r.n>1?`（${r.n}か所）`:''}</div><div class="s">${r.snip}</div></div>`;}).join('');
 }
-$('#hits').addEventListener('click',e=>{const h=e.target.closest('.hit');if(h)openViewer(+h.dataset.p);});
+$('#hits').addEventListener('click',e=>{const h=e.target.closest('.hit');if(!h)return; if(h.dataset.note) openNote(h.dataset.note); else openViewer(+h.dataset.p);});
 window.addEventListener('resize',()=>{ if($('#viewer').classList.contains('open')){ clearTimeout(window._rz); window._rz=setTimeout(render,200);} });
+
+/* ---------- my notes ---------- */
+let NOTES={};
+async function loadNotes(){ try{ const d=await db(); NOTES=await new Promise((res,rej)=>{const o={};const t=d.transaction('notes','readonly');const c=t.objectStore('notes').openCursor();c.onsuccess=()=>{const cur=c.result;if(cur){o[cur.key]=cur.value.text;cur.continue();}};t.oncomplete=()=>res(o);t.onerror=()=>rej(t.error);}); }catch(_){ NOTES={}; } }
+async function saveNote(name,text){ text=text.replace(/\s+$/,''); if(text) NOTES[name]=text; else delete NOTES[name];
+  await idb('notes','readwrite',s=>{ if(text) s.put({text,updated:Date.now()},name); else s.delete(name); }); noteCount(); }
+function inl(s){ return esc(s).replace(/\*\*(.+?)\*\*/g,'<b>$1</b>'); }
+function md(src){
+  const out=[]; let inList=false;
+  const close=()=>{ if(inList){ out.push('</ul>'); inList=false; } };
+  for(let line of src.replace(/\r/g,'').split('\n')){
+    const t=line.trim();
+    if(!t){ close(); continue; }
+    let m;
+    if((m=t.match(/^#{1,4}\s*(.+)/))||(m=t.match(/^(\d{1,2}[\.．、]\s*.+)$/))){ close(); out.push(`<h3>${inl(m[1].replace(/^#+\s*/,''))}</h3>`); continue; }
+    if((m=t.match(/^[\*\-・•●]\s*(.+)/))){ if(!inList){ out.push('<ul>'); inList=true; }
+      let body=m[1], lm=body.match(/^([^:：]{1,24})[:：]\s*(.*)$/);
+      out.push(`<li>${lm?`<b>${inl(lm[1])}</b>：${inl(lm[2])}`:inl(body)}</li>`); continue; }
+    close(); out.push(`<p>${inl(t)}</p>`);
+  }
+  close(); return out.join('');
+}
+let NCUR=null, NEDIT=false;
+function openNote(name){ NCUR=F.find(f=>f.name===name); if(!NCUR) return; NEDIT=!NOTES[name]; drawNote(); $('#note').classList.add('open'); document.body.style.overflow='hidden'; }
+function closeNote(){ $('#note').classList.remove('open'); if(!$('#viewer').classList.contains('open')) document.body.style.overflow=''; renderList(); }
+function drawNote(){
+  const f=NCUR, t=NOTES[f.name]||'';
+  $('#nttl').innerHTML=`${esc(f.name)}<small>${esc(f.reading||'')}</small>`;
+  $('#nedit').textContent=NEDIT?'保存':'編集';
+  if(NEDIT){ $('#nin').innerHTML=`<textarea id="ntext" placeholder="ここにまとめを書くか貼り付けてください。\n\n見出し：「1. 基本情報」のように番号で始まる行\n箇条書き：「* 」「- 」「・」で始まる行\n「甘草: 説明」のように書くと、コロンの前が太字になります"></textarea><p style="color:var(--sub);font-size:.8rem">保存すると見やすく整形されます。空にして保存するとノートを削除します。</p>`; $('#ntext').value=t; }
+  else $('#nin').innerHTML=t?`<div class="md">${md(t)}</div>`:'<p class="empty">まだノートがありません</p>';
+  $('#nin').parentElement.scrollTop=0;
+}
+$('#nclose').onclick=async()=>{ if(NEDIT){ const v=$('#ntext').value; if(v.replace(/\s+$/,'')!==(NOTES[NCUR.name]||'') && !confirm('保存せずに閉じますか？')) return; } closeNote(); };
+$('#nedit').onclick=async()=>{ if(NEDIT){ try{ await saveNote(NCUR.name,$('#ntext').value); toast('保存しました'); }catch(err){ toast('保存に失敗：'+(err.message||err)); return; } NEDIT=false; } else NEDIT=true; drawNote(); };
+$('#nbook').onclick=()=>{ const p=NCUR.page; closeNote(); openViewer(p); };
+$('#vnote').onclick=()=>{ const f=formulaAt(V.book); if(f) openNote(f.name); };
+function noteCount(){ const n=Object.keys(NOTES).length; const el=$('#noteCount'); if(el) el.textContent=`保存中のノート：${n}件`; }
+$('#nexport').onclick=()=>{ const data=JSON.stringify({app:'ekikampo-notes',version:1,exported:new Date().toISOString(),notes:NOTES},null,1);
+  const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([data],{type:'application/json'})); const d=new Date();
+  a.download=`ekikampo-notes-${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}.json`; document.body.appendChild(a); a.click(); setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},2000); };
+$('#nimport').onclick=()=>$('#nfile').click();
+$('#nfile').onchange=async e=>{ const f=e.target.files[0]; e.target.value=''; if(!f) return;
+  try{ const j=JSON.parse(await f.text()); const ns=j.notes||{}; let n=0, over=0;
+    for(const [k,v] of Object.entries(ns)){ if(typeof v!=='string'||!v.trim()) continue; if(NOTES[k]&&NOTES[k]!==v) over++; }
+    if(over && !confirm(`${over}件は今のノートと内容が違います。読み込んだ内容で上書きしますか？`)) return;
+    for(const [k,v] of Object.entries(ns)){ if(typeof v==='string'&&v.trim()){ await saveNote(k,v); n++; } }
+    noteCount(); renderList(); toast(`${n}件のノートを読み込みました`); }
+  catch(err){ toast('読み込めませんでした：'+(err.message||err)); } };
 
 /* ---------- init ---------- */
 window.addEventListener('DOMContentLoaded',async()=>{
   scanEmbed(); if(EMBED.size){ document.querySelectorAll('.embed-hide').forEach(e=>e.classList.add('hidden')); }
-  await refreshHave(); renderGyou(); renderList(); storeInfo();
+  await loadNotes(); await refreshHave(); renderGyou(); renderList(); storeInfo(); noteCount();
   const t=LS.get('tab','list'); setTab(t);
   if(!have.size) setTimeout(()=>toast('「PDF・設定」からスキャンPDFを読み込んでください'),600);
 });
