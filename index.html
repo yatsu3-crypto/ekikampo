@@ -164,6 +164,16 @@ code{background:var(--kin-soft);padding:1px 5px;border-radius:4px;font-size:.82r
       <h2>マイノートのバックアップ</h2>
       <p>ノートはこの端末の中だけに保存されます。機種変更や別の端末で使うときは、書き出したファイルを読み込んでください。</p>
       <p id="noteCount"></p>
+      <h2 style="margin-top:14px">まとめて取り込む</h2>
+      <p>全方剤のまとめを1つの文書に続けて書き、方剤名だけの行（例：「安中散」「# 胃苓湯」「【温経湯】」）で区切ってください。貼り付けるか、テキストファイル（.txt / .md）を選ぶと、方剤ごとに自動で振り分けます。</p>
+      <textarea id="bulk" placeholder="安中散&#10;1. 基本情報・組成&#10;* 出典: …&#10;&#10;胃苓湯&#10;1. 基本情報・組成&#10;…" style="width:100%;min-height:160px;padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--washi);font-size:16px;font-family:inherit"></textarea>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
+        <button class="btn" id="bulkGo">取り込む</button>
+        <button class="btn ghost" id="bulkFile">ファイルから</button>
+        <input type="file" id="bfile" accept=".txt,.md,text/plain,text/markdown" class="hidden">
+      </div>
+      <p id="bulkMsg"></p>
+      <h2 style="margin-top:14px">バックアップ</h2>
       <button class="btn ghost" id="nexport">書き出す</button>
       <button class="btn ghost" id="nimport">読み込む</button>
       <input type="file" id="nfile" accept="application/json,.json" class="hidden">
@@ -613,6 +623,29 @@ $('#nclose').onclick=async()=>{ if(NEDIT){ const v=$('#ntext').value; if(v.repla
 $('#nedit').onclick=async()=>{ if(NEDIT){ try{ await saveNote(NCUR.name,$('#ntext').value); toast('保存しました'); }catch(err){ toast('保存に失敗：'+(err.message||err)); return; } NEDIT=false; } else NEDIT=true; drawNote(); };
 $('#nbook').onclick=()=>{ const p=NCUR.page; closeNote(); openViewer(p); };
 $('#vnote').onclick=()=>{ const f=formulaAt(V.book); if(f) openNote(f.name); };
+function headName(line){
+  let t=line.trim().normalize('NFKC'); if(!t||t.length>30) return null;
+  t=t.replace(/^#{1,4}\s*/,'').replace(/^[■□◆◇●○▼▶★☆【「『\[]\s*/,'').replace(/[】」』\]]\s*$/,'').replace(/[（(][^）)]*[）)]\s*$/,'').trim();
+  return HEADMAP.get(normName(t))||null;
+}
+const HEADMAP=new Map(); for(const f of F){ HEADMAP.set(normName(f.name),f.name); for(const part of f.name.split(/[（）()／]/)) if(part) HEADMAP.set(normName(part),f.name); }
+function splitBulk(text){
+  const out={}, order=[]; let cur=null, buf=[];
+  const flush=()=>{ if(cur){ const body=buf.join('\n').replace(/^\s+|\s+$/g,''); if(body){ out[cur]=out[cur]?out[cur]+'\n\n'+body:body; if(!order.includes(cur)) order.push(cur);} } };
+  for(const line of text.replace(/\r/g,'').split('\n')){ const h=headName(line); if(h){ flush(); cur=h; buf=[]; } else buf.push(line); }
+  flush(); return {out,order};
+}
+async function bulkImport(text){
+  const {out,order}=splitBulk(text);
+  if(!order.length){ $('#bulkMsg').textContent='方剤名の行が見つかりませんでした。方剤名だけを1行に書いて区切ってください。'; return; }
+  const over=order.filter(k=>NOTES[k]&&NOTES[k]!==out[k]);
+  if(!confirm(`${order.length}方剤のノートを取り込みます。\n${order.slice(0,8).join('、')}${order.length>8?' ほか':''}${over.length?`\n\nうち${over.length}件は今のノートを上書きします。`:''}`)) return;
+  for(const k of order) await saveNote(k,out[k]);
+  $('#bulkMsg').textContent=`${order.length}方剤のノートを取り込みました：${order.join('、')}`; $('#bulk').value=''; renderList(); toast(`${order.length}件取り込みました`);
+}
+$('#bulkGo').onclick=()=>{ const t=$('#bulk').value; if(t.trim()) bulkImport(t); };
+$('#bulkFile').onclick=()=>$('#bfile').click();
+$('#bfile').onchange=async e=>{ const f=e.target.files[0]; e.target.value=''; if(f) bulkImport(await f.text()); };
 function noteCount(){ const n=Object.keys(NOTES).length; const el=$('#noteCount'); if(el) el.textContent=`保存中のノート：${n}件`; }
 $('#nexport').onclick=()=>{ const data=JSON.stringify({app:'ekikampo-notes',version:1,exported:new Date().toISOString(),notes:NOTES},null,1);
   const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([data],{type:'application/json'})); const d=new Date();
